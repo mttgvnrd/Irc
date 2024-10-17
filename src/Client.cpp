@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   Client.cpp                                         :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: mgiovana <marvin@42.fr>                    +#+  +:+       +#+        */
+/*   By: larmogid <larmogid@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/09/30 12:15:12 by mgiovana          #+#    #+#             */
-/*   Updated: 2024/09/30 12:16:21 by mgiovana         ###   ########.fr       */
+/*   Updated: 2024/10/17 17:51:24 by larmogid         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -43,6 +43,10 @@ void Client::setNickname(const std::string& nickname) {
 
 void Client::setUsername(const std::string& username) {
     _username = username;
+}
+
+void Client::setVerified(bool verified) {
+    _verified = verified;  // Supponendo che _verified sia un membro privato
 }
 
 void Client::verify() {

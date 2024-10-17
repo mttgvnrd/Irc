@@ -6,7 +6,7 @@
 /*   By: larmogid <larmogid@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/09/30 12:14:47 by mgiovana          #+#    #+#             */
-/*   Updated: 2024/10/16 15:25:54 by larmogid         ###   ########.fr       */
+/*   Updated: 2024/10/17 18:41:29 by larmogid         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -40,16 +40,29 @@ Server::~Server() {
     stop();
 }
 
+// Funzione per inviare un messaggio di errore
+
+/* Elimina std::cerr da messaggi di errore: Invece di stampare 
+errori sul terminale con std::cerr, potresti considerare di 
+registrare questi eventi in un file di log per facilitare il 
+debugging e l'analisi post-mortem. */
+void Server::sendError(Client* client, const std::string& message) {
+    std::string error_msg = "ERROR : " + message + "\r\n"; // IRC requires \r\n at the end
+    std::cerr << "Sending error to client FD " << client->getFd() << ": " << error_msg; // Logging error
+    send(client->getFd(), error_msg.c_str(), error_msg.size(), 0);
+}
+
 // Creazione della socket NON BLOCCANTE (IPv4)
 void Server::createSocket() {
     _server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (_server_fd == -1) {
-        std::cerr << "Error creating socket." << std::endl;
+        std::cerr << "Failed to create socket." << strerror(errno) << std::endl;
         exit(EXIT_FAILURE);
     }
-        int opt = 1;
+    
+    int opt = 1;
     if (setsockopt(_server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-        std::cerr << "Error in setsockopt." << std::endl;
+        std::cerr << "Error in setsockopt." << strerror(errno) << std::endl;
         exit(EXIT_FAILURE);
     }
     // Configurazione dell'indirizzo del server
@@ -60,7 +73,7 @@ void Server::createSocket() {
     // Configurare la socket come non bloccante
     int flags = fcntl(_server_fd, F_SETFL, O_NONBLOCK);
     if (flags == -1) {
-        std::cerr << "Error configuring non-blocking socket." << std::endl;
+        std::cerr << "Failed to configure non-blocking socket." << strerror(errno) << std::endl;
         exit(EXIT_FAILURE);
     }
 }
@@ -68,7 +81,7 @@ void Server::createSocket() {
 // Associazione della socket a una porta
 void Server::bindSocket() {
     if (bind(_server_fd, (struct sockaddr*)&_address, sizeof(_address)) < 0) {
-        perror("Error binding socket");
+        std::cerr << "Failed to bind socket: " << strerror(errno) << std::endl;
         exit(EXIT_FAILURE);
     }
 }
@@ -76,7 +89,7 @@ void Server::bindSocket() {
 // Ascolto delle connessioni
 void Server::listenConnections() {
     if (listen(_server_fd, 10) < 0) {
-        std::cerr << "Error listening for connections." << std::endl;
+        std::cerr << "Failed to listen for connections." << strerror(errno) << std::endl;
         exit(EXIT_FAILURE);
     }
     std::cout << "Server listening on Port " << _port << std::endl;
@@ -93,7 +106,7 @@ void Server::pollConnections() {
     while (true) {
         int poll_count = poll(_poll_fds.data(), _poll_fds.size(), -1);
         if (poll_count == -1) {
-            std::cerr << "Error in poll()." << std::endl;
+            std::cerr << "Error in poll()." << strerror(errno) << std::endl;
             return;
         }
 
@@ -130,6 +143,25 @@ void Server::stop() {
     std::cout << "Server closed." << std::endl;
 }
 
+void Server::handlePartCommand(Client* client, const std::string& channelName) {
+    auto it = _channels.find(channelName);
+    if (it == _channels.end()) {
+        sendError(client, "No such channel: " + channelName);
+        return;
+    }
+
+    Channel* channel = it->second;
+    if (!channel->isMember(client)) {
+        sendError(client, "You are not a member of " + channelName);
+        return;
+    }
+
+    channel->removeMember(client);
+    std::string partMsg = ":" + client->getNickname() + " PART " + channelName + "\n";
+    channel->broadcastMessage(partMsg, client);
+    std::cout << "Client " << client->getNickname() << " left channel " << channelName << std::endl;
+}
+
 void Server::handleJoinCommand(Client* client, const std::string& channelName) {
 
     Channel* channel;
@@ -159,7 +191,7 @@ void Server::handleJoinCommand(Client* client, const std::string& channelName) {
 void Server::acceptNewClient() {
     int new_client_fd = accept(_server_fd, NULL, NULL);
     if (new_client_fd == -1) {
-        std::cerr << "Error accepting connection." << std::endl;
+        std::cerr << "Failed to accept connection." << std::endl;
         return;
     }
 
@@ -177,20 +209,29 @@ void Server::acceptNewClient() {
 }
 
 // Gestione dei messaggi del client
+
+/* Gestione della disconnessione: Nella funzione handleClientMessage, 
+si potrebbe gestire meglio la disconnessione dei client, assicurandoti che tutti i 
+membri del canale siano avvisati. */
 void Server::handleClientMessage(int client_fd) {
     char buffer[1024];
     int bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
 
-    if (bytes_received <= 0) {
+    if (bytes_received < 0) {
+        // Errore durante la ricezione dei dati
+        std::cerr << "Failed to receive data from client FD " << client_fd << ": " << strerror(errno) << std::endl;
+        sendError(_clients_map[client_fd], "An error occurred while receiving your message.");
+        return;
+    } else if (bytes_received >= sizeof(buffer) - 1) {
+        sendError(_clients_map[client_fd], "Message too long.");
+        return;
+    } else if (bytes_received == 0) {
+        // Il client ha chiuso la connessione
         std::cout << "Client disconnected. FD: " << client_fd << std::endl;
         close(client_fd);
-        _poll_fds.erase(
-            std::remove_if(
-                _poll_fds.begin(), _poll_fds.end(),
-                [client_fd](const pollfd &pfd) { return pfd.fd == client_fd; }
-            ),
-            _poll_fds.end()
-        );
+        _poll_fds.erase(std::remove_if(_poll_fds.begin(), _poll_fds.end(),
+            [client_fd](const pollfd &pfd) { return pfd.fd == client_fd; }),
+                _poll_fds.end());
         delete _clients_map[client_fd];  // Libera la memoria
         _clients_map.erase(client_fd);
         return;
@@ -200,8 +241,15 @@ void Server::handleClientMessage(int client_fd) {
     std::string command(buffer);
 
     // Processa il comando ricevuto
-    handleCommand(command, _clients_map[client_fd]);
+    try {
+        handleCommand(command, _clients_map[client_fd]);
+    } catch (const std::exception& e) {
+        // Gestione di eventuali eccezioni lanciate durante la elaborazione del comando
+        std::cerr << "Failed to process command from client FD " << client_fd << ": " << e.what() << std::endl;
+        sendError(_clients_map[client_fd], "An error occurred while processing your request.");
+    }
 }
+
 
 void Server::handleQuitCommand(Client* client) {
     int client_fd = client->getFd();
@@ -223,136 +271,126 @@ void Server::handleQuitCommand(Client* client) {
 
     // Rimuovi il client dalla lista di pollfd
     _poll_fds.erase(std::remove_if(_poll_fds.begin(), _poll_fds.end(),
-                                   [client_fd](const pollfd &pfd) { return pfd.fd == client_fd; }),
-                    _poll_fds.end());
+        [client_fd](const pollfd &pfd) { return pfd.fd == client_fd; }),
+            _poll_fds.end());
 
     // Libera la memoria del client
-    delete _clients_map[client_fd];
+    delete client;
+    //delete _clients_map[client_fd];
     _clients_map.erase(client_fd);
 
     std::cout << "Client FD " << client_fd << " removed from server." << std::endl;
 }
 
-// Funzione per inviare un messaggio di errore
-void Server::sendError(Client* client, const std::string& message) {
-    std::string error_msg = "ERROR : " + message + "\n";
-    send(client->getFd(), error_msg.c_str(), error_msg.size(), 0);
-}
-
-// Controllo se un nickname è già in uso
-bool Server::isNicknameInUse(const std::string& nickname) {
-    for (std::map<int, Client*>::iterator it = _clients_map.begin(); it != _clients_map.end(); ++it) {
-        if (it->second->getNickname() == nickname) {
-            return true;  // Il nickname è già in uso
-        }
-    }
-    return false;  // Il nickname non è in uso
-}
-
 // Gestione dei comandi (NICK e USER)
+
+/* Controllo di stato: Puoi considerare di avere un metodo per 
+verificare lo stato del client per semplificare la gestione dei 
+comandi in handleCommand. */
+
+/* Gestione delle eccezioni: La gestione delle eccezioni in 
+handleCommand è un buon inizio. Assicurati che tutte le funzioni 
+critiche (come send, recv, ecc.) abbiano una gestione delle 
+eccezioni adeguata per evitare crash inaspettati. */
 void Server::handleCommand(const std::string& command, Client* client) {
+    // Separazione del comando dal resto del messaggio
     std::istringstream iss(command);
     std::string cmd;
-    iss >> cmd;
+    iss >> cmd; // Estrae il comando principale
     
     if (cmd == "PASS") {
+        // Estrai la password dal comando
         std::string password;
-        iss >> password;  // Estrai la password dal comando
+        iss >> password;
 
-        if (client->isAuthenticated()) {
-            std::cerr << "Error: user " << client->getNickname() << " is already authenticated." << std::endl;
-            std::string error_msg = "Error: user " + client->getNickname() + " is already authenticated.\n";
-            send(client->getFd(), error_msg.c_str(), error_msg.size(), 0);
-            return;  // Interrompi l'esecuzione se l'utente è già autenticato
-        }
-        else if (password.empty()) {
-            std::cerr << "Error: no password provided." << std::endl;
-            std::string error_msg = "Error: no password provided.\n";
-            send(client->getFd(), error_msg.c_str(), error_msg.size(), 0);
-            return;  // Interrompi se la password è vuota
-        }
-        else if (password != this->_password) {
-            std::cerr << "Error: password does not match." << std::endl;
-            std::string error_msg = "Error: password does not match.\n";
-            send(client->getFd(), error_msg.c_str(), error_msg.size(), 0);
-            return;  // Interrompi se la password non corrisponde
-        }
-        else {
-            client->verify();  // Autenticazione del client
-            std::cout << "Client " << client->getFd() << " verified successfully." << std::endl;
-
-            // Invia un messaggio di benvenuto o conferma al client
-           // std::string welcome_msg = "001 " + client->getNickname() + " :Welcome to the IRC server!\n";
-            //send(client->getFd(), welcome_msg.c_str(), welcome_msg.size(), 0);
-            return ;
-        }
-    }
-    
-    if (cmd == "NICK") {
-        std::string nickname;
-        iss >> nickname;
-
-        if (!client->isVerified()){
-            std::cerr << "Error: client " << client->getFd() << " is not verified." << std::endl;
-            std::string error_msg = "Error: you aren't verified.\n";
-            send(client->getFd(), error_msg.c_str(), error_msg.size(), 0);
+        // Verifica se la password è vuota
+        if (password.empty()) {
+            sendError(client, "No password provided.");
             return;
         }
 
-        else if (isNicknameInUse(nickname)) {
+        // Controlla se la password fornita corrisponde
+        if (password == this->_password) {
+            client->authenticate();
+            client->setVerified(true); // Verifica il client
+
+            // Invia il messaggio di benvenuto solo se non è già stato inviato
+            if (!client->isWelcomeMessageSent()) {
+                std::string welcome_msg = "001 " + client->getNickname() + " :Benvenuto sul server IRC!\n";
+                send(client->getFd(), welcome_msg.c_str(), welcome_msg.size(), 0);
+                client->setWelcomeMessageSent(true);
+            }
+        } else {
+            sendError(client, "Password does not match.");
+        }
+    } else if (!client->isVerified()) {
+        std::string nickname = client->getNickname();
+        std::string invite_msg; 
+        if (!nickname.empty()) {
+            invite_msg = "401 " + nickname + " :Please enter your password to verify.\n";
+        } else {
+            invite_msg = "401 * :Please enter your password to verify.\n"; // Usa un asterisco per indicare che non c'è un nickname
+        }
+        send(client->getFd(), invite_msg.c_str(), invite_msg.size(), 0);
+        std::cerr << "Error: " << invite_msg; // Usa lo stesso messaggio per il log
+        return;// Esci dalla funzione se il client non è verificato
+    } else if (cmd == "NICK") {
+        // Logica per gestire il comando NICK
+        std::string nickname;
+        iss >> nickname;
+
+        if (isNicknameInUse(nickname)) {
             sendError(client, "Nickname " + nickname + " is already in use. Please choose a different name.");
             std::cerr << "Error: Nickname " << nickname << " already in use." << std::endl;
             return;
         }
-
+        
         client->setNickname(nickname);
         _nickname_map[nickname] = client;
         std::cout << "Client " << client->getFd() << " has set nickname to: " << nickname << std::endl;
-        client->authenticate();
-         if (client->isAuthenticated() && !client->isWelcomeMessageSent()) {
-        std::cout << "Client " << client->getFd() << " authenticated!" << std::endl;
-        std::string welcome_msg = "001 " + client->getNickname() + " :Benvenuto sul server IRC!\n";
-        send(client->getFd(), welcome_msg.c_str(), welcome_msg.size(), 0);
-        client->setWelcomeMessageSent(true);  // Imposta che il messaggio è stato inviato
-    }
-    }
-    else if (cmd == "USER") {
-        
-        if (!client->isVerified()){
-            std::cerr << "Error: client " << client->getFd() << " is not verified." << std::endl;
-            std::string error_msg = "Error: you aren't verified.\n";
-            send(client->getFd(), error_msg.c_str(), error_msg.size(), 0);
-            return;
-        }
 
+        // Verifica se sia `NICK` che `USER` sono impostati
+        client->authenticate();
+        if (client->isAuthenticated() && !client->isWelcomeMessageSent()) {
+            std::cout << "Client " << client->getFd() << " authenticated!" << std::endl;
+            std::string welcome_msg = "001 " + client->getNickname() + " :Benvenuto sul server IRC!\n";
+            send(client->getFd(), welcome_msg.c_str(), welcome_msg.size(), 0);
+            client->setWelcomeMessageSent(true);
+        }
+    } else if (cmd == "USER") {
         std::string username;
-        iss >> username;  // Solo il primo argomento è considerato il nome utente
+        iss >> username; // Solo il primo argomento è considerato il nome utente
         client->setUsername(username);
         std::cout << "Client " << client->getFd() << " has set username to: " << username << std::endl;
 
         // Autenticazione del client (richiede sia NICK che USER)
         client->authenticate();
         if (client->isAuthenticated() && !client->isWelcomeMessageSent()) {
-        std::cout << "Client " << client->getFd() << " authenticated!" << std::endl;
-        std::string welcome_msg = "001 " + client->getNickname() + " :Benvenuto sul server IRC!\n";
-        send(client->getFd(), welcome_msg.c_str(), welcome_msg.size(), 0);
-        client->setWelcomeMessageSent(true);  // Imposta che il messaggio è stato inviato
-    }
-    }
-    else if (cmd == "JOIN") {
-
-        if (!client->isVerified()){
-            std::cerr << "Error: client " << client->getFd() << " is not verified." << std::endl;
-            std::string error_msg = "Error: you aren't verified.\n";
-            send(client->getFd(), error_msg.c_str(), error_msg.size(), 0);
-            return;
+            std::cout << "Client " << client->getFd() << " authenticated!" << std::endl;
+            std::string welcome_msg = "001 " + client->getNickname() + " :Benvenuto sul server IRC!\n";
+            send(client->getFd(), welcome_msg.c_str(), welcome_msg.size(), 0);
+            client->setWelcomeMessageSent(true); // Imposta che il messaggio è stato inviato
         }
-
+    } else if (cmd == "JOIN") {
         std::string channelName;
         iss >> channelName;
+        if (channelName.empty()) {
+            sendError(client, "No channel name provided.");
+            return;
+        }
         handleJoinCommand(client, channelName);
-    }
-    else if (cmd == "PRIVMSG") {
+    } else if (cmd == "PART") {//USCITA DAL CANALE
+        std::string channelName;
+        iss >> channelName;
+
+        if (channelName.empty()) {
+            sendError(client, "No channel name provided.");
+            return;
+            }
+        
+        // Gestisci la logica di uscita dal canale
+        //handlePartCommand(client, channelName);
+    } else if (cmd == "PRIVMSG") {
 
         if (!client->isVerified()){
             std::cerr << "Error: client " << client->getFd() << " is not verified." << std::endl;
@@ -427,14 +465,23 @@ void Server::handleCommand(const std::string& command, Client* client) {
             send(client->getFd(), error_msg.c_str(), error_msg.size(), 0);
             return;
         }
-    // Ignora il comando CAP senza alcun output
-    ;
+        // Ignora il comando CAP senza alcun output
+        ;
     }
     else if (cmd == "QUIT") {
         handleQuitCommand(client);
-        return;  // Interrompi l'elaborazione del comando
     }
     else {
-        std::cerr << "Comando non riconosciuto: " << cmd << std::endl;
+        sendError(client, "Unknown command.");
     }
+}
+
+// Controllo se un nickname è già in uso
+bool Server::isNicknameInUse(const std::string& nickname) {
+    for (std::map<int, Client*>::iterator it = _clients_map.begin(); it != _clients_map.end(); ++it) {
+        if (it->second->getNickname() == nickname) {
+            return true;  // Il nickname è già in uso
+        }
+    }
+    return false;  // Il nickname non è in uso
 }

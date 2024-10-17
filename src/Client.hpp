@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   Client.hpp                                         :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: mgiovana <marvin@42.fr>                    +#+  +:+       +#+        */
+/*   By: larmogid <larmogid@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/09/30 12:15:17 by mgiovana          #+#    #+#             */
-/*   Updated: 2024/09/30 12:16:30 by mgiovana         ###   ########.fr       */
+/*   Updated: 2024/10/17 17:43:21 by larmogid         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -31,6 +31,7 @@ public:
 
     void setNickname(const std::string& nickname);
     void setUsername(const std::string& username);
+    void setVerified(bool verified);
     void authenticate();
     void verify();
 

@@ -6,7 +6,7 @@
 /*   By: larmogid <larmogid@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/09/30 12:14:52 by mgiovana          #+#    #+#             */
-/*   Updated: 2024/10/16 15:54:04 by larmogid         ###   ########.fr       */
+/*   Updated: 2024/10/17 18:25:05 by larmogid         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -32,6 +32,11 @@
 #include "Client.hpp"
 #include "Channel.hpp"
 
+const std::string ERR_NOT_VERIFIED = "You aren't verified. Please insert your password first.";
+const std::string ERR_NICK_IN_USE = "Nickname is already in use. Please choose a different name.";
+const std::string ERR_NO_PASSWORD = "No password provided.";
+const std::string ERR_PASS_MISMATCH = "Password does not match.";
+
 class Server {
 public:
     Server(int port, const std::string& password);
@@ -43,6 +48,7 @@ public:
     void handleJoinCommand(Client* client, const std::string& channelName);
     void handlePrivMsgCommand(Client* client, const std::string& target, const std::string& message);
     void handleQuitCommand(Client* client);
+    void handlePartCommand(Client* client, const std::string& channelName);
 
 private:
     int _server_fd;
