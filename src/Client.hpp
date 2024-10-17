@@ -25,16 +25,22 @@ public:
     std::string getNickname() const;
     std::string getUsername() const;
     bool isAuthenticated() const;
+    bool isVerified() const;
+    bool isWelcomeMessageSent() const;
+    void setWelcomeMessageSent(bool value);
 
     void setNickname(const std::string& nickname);
     void setUsername(const std::string& username);
     void authenticate();
+    void verify();
 
 private:
     int _fd;
     std::string _nickname;
     std::string _username;
     bool _authenticated;
+    bool _verified;
+    bool _welcomeMessageSent;
     
 };
 

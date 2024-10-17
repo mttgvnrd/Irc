@@ -13,7 +13,7 @@
 
 #include "Client.hpp"
 
-Client::Client(int fd) : _fd(fd), _authenticated(false) {}
+Client::Client(int fd) : _fd(fd), _authenticated(false) , _verified(false),  _welcomeMessageSent(false) {}
 
 Client::~Client() {}
 
@@ -29,8 +29,12 @@ std::string Client::getUsername() const {
     return _username;
 }
 
-bool Client::isAuthenticated() const {
+bool Client::isAuthenticated() const { // USER & NICK
     return _authenticated;
+}
+
+bool Client::isVerified() const { //PASS
+    return _verified;
 }
 
 void Client::setNickname(const std::string& nickname) {
@@ -41,8 +45,20 @@ void Client::setUsername(const std::string& username) {
     _username = username;
 }
 
+void Client::verify() {
+        this->_verified = true;
+}
+
 void Client::authenticate() {
     if (!_nickname.empty() && !_username.empty()) {
         _authenticated = true;
     }
+}
+
+bool Client::isWelcomeMessageSent() const {
+    return _welcomeMessageSent;
+}
+
+void Client::setWelcomeMessageSent(bool value) {
+    _welcomeMessageSent = value;
 }
