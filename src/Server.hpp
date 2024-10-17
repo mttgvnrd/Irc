@@ -42,6 +42,7 @@ public:
     void handleClientMessage(int client_fd);
     void handleJoinCommand(Client* client, const std::string& channelName);
     void handlePrivMsgCommand(Client* client, const std::string& target, const std::string& message);
+    void handleQuitCommand(Client* client);
 
 private:
     int _server_fd;

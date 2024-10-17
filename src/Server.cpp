@@ -131,12 +131,6 @@ void Server::stop() {
 }
 
 void Server::handleJoinCommand(Client* client, const std::string& channelName) {
-    // Controlla se il client è autenticato
-    if (!client->isAuthenticated()) {
-        std::string errorMsg = "ERR_NOTREGISTERED :You have not registered (NICK/USER missing)\n";
-        send(client->getFd(), errorMsg.c_str(), errorMsg.size(), 0);
-        return;
-    }
 
     Channel* channel;
 
@@ -154,7 +148,7 @@ void Server::handleJoinCommand(Client* client, const std::string& channelName) {
     if (channel->addMember(client)) {
         std::string joinMsg = ":" + client->getNickname() + " JOIN " + channelName + "\n";
         channel->broadcastMessage(joinMsg, client);  // Invia il messaggio di JOIN agli altri membri
-        std::cout << " Client " << client->getNickname() << " joined to channel " << channelName << std::endl;
+        std::cout << "Client " << client->getNickname() << " joined to channel " << channelName << std::endl;
     } else {
         std::string errorMsg = "ERR_CHANNELFULL " + channelName + " :Cannot join channel, it is full.\n";
         send(client->getFd(), errorMsg.c_str(), errorMsg.size(), 0);
@@ -207,6 +201,36 @@ void Server::handleClientMessage(int client_fd) {
 
     // Processa il comando ricevuto
     handleCommand(command, _clients_map[client_fd]);
+}
+
+void Server::handleQuitCommand(Client* client) {
+    int client_fd = client->getFd();
+
+    // Notifica i canali della disconnessione
+    for (std::map<std::string, Channel*>::iterator it = _channels.begin(); it != _channels.end(); ++it) {
+        Channel* channel = it->second;
+        if (channel->isMember(client)) {
+            std::string partMessage = ":" + client->getNickname() + " QUIT\n";
+            channel->broadcastMessage(partMessage, client);  // Notifica agli altri membri
+            channel->removeMember(client);  // Rimuovi il client dal canale
+        }
+    }
+
+    std::cout << "Client " << client->getNickname() << " has disconnected" << std::endl;
+
+    // Chiudi il file descriptor del client
+    close(client_fd);
+
+    // Rimuovi il client dalla lista di pollfd
+    _poll_fds.erase(std::remove_if(_poll_fds.begin(), _poll_fds.end(),
+                                   [client_fd](const pollfd &pfd) { return pfd.fd == client_fd; }),
+                    _poll_fds.end());
+
+    // Libera la memoria del client
+    delete _clients_map[client_fd];
+    _clients_map.erase(client_fd);
+
+    std::cout << "Client FD " << client_fd << " removed from server." << std::endl;
 }
 
 // Funzione per inviare un messaggio di errore
@@ -405,6 +429,10 @@ void Server::handleCommand(const std::string& command, Client* client) {
         }
     // Ignora il comando CAP senza alcun output
     ;
+    }
+    else if (cmd == "QUIT") {
+        handleQuitCommand(client);
+        return;  // Interrompi l'elaborazione del comando
     }
     else {
         std::cerr << "Comando non riconosciuto: " << cmd << std::endl;
