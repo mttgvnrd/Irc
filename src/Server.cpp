@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   Server.cpp                                         :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: larmogid <larmogid@student.42.fr>          +#+  +:+       +#+        */
+/*   By: luigi <luigi@student.42.fr>                +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/09/30 12:14:47 by mgiovana          #+#    #+#             */
-/*   Updated: 2024/10/17 18:41:29 by larmogid         ###   ########.fr       */
+/*   Updated: 2024/10/18 11:53:18 by luigi            ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -324,16 +324,19 @@ void Server::handleCommand(const std::string& command, Client* client) {
             sendError(client, "Password does not match.");
         }
     } else if (!client->isVerified()) {
-        std::string nickname = client->getNickname();
-        std::string invite_msg; 
-        if (!nickname.empty()) {
-            invite_msg = "401 " + nickname + " :Please enter your password to verify.\n";
-        } else {
-            invite_msg = "401 * :Please enter your password to verify.\n"; // Usa un asterisco per indicare che non c'è un nickname
+        if (!client->isPasswordRequestSent()) {
+            std::cout << "Verifying client FD " << client->getFd() << std::endl;
+            std::string invite_msg = "401  :Please enter your password to verify.\n"; // Sempre senza nickname, visto che non è stato impostato
+
+            // Invia il messaggio al client per richiedere la password
+            send(client->getFd(), invite_msg.c_str(), invite_msg.size(), 0);
+            std::cout << "Server log: Sent password verification request to client FD " << client->getFd() << std::endl;
+
+            // Imposta il flag per evitare l'invio multiplo
+            client->setPasswordRequestSent(true);
         }
-        send(client->getFd(), invite_msg.c_str(), invite_msg.size(), 0);
-        std::cerr << "Error: " << invite_msg; // Usa lo stesso messaggio per il log
-        return;// Esci dalla funzione se il client non è verificato
+        return; // Esci dalla funzione se il client non è verificato
+    
     } else if (cmd == "NICK") {
         // Logica per gestire il comando NICK
         std::string nickname;

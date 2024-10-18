@@ -3,17 +3,17 @@
 /*                                                        :::      ::::::::   */
 /*   Client.cpp                                         :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: larmogid <larmogid@student.42.fr>          +#+  +:+       +#+        */
+/*   By: luigi <luigi@student.42.fr>                +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/09/30 12:15:12 by mgiovana          #+#    #+#             */
-/*   Updated: 2024/10/17 17:51:24 by larmogid         ###   ########.fr       */
+/*   Updated: 2024/10/18 11:46:55 by luigi            ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 
 #include "Client.hpp"
 
-Client::Client(int fd) : _fd(fd), _authenticated(false) , _verified(false),  _welcomeMessageSent(false) {}
+Client::Client(int fd) : _fd(fd), _authenticated(false), _verified(false), _welcomeMessageSent(false), _passwordRequestSent(false) {}
 
 Client::~Client() {}
 
@@ -37,6 +37,22 @@ bool Client::isVerified() const { //PASS
     return _verified;
 }
 
+bool Client::isPasswordRequestSent() const {
+    return _passwordRequestSent;
+}
+
+bool Client::isWelcomeMessageSent() const {
+    return _welcomeMessageSent;
+}
+
+void Client::setWelcomeMessageSent(bool value) {
+    _welcomeMessageSent = value;
+}
+
+void Client::setPasswordRequestSent(bool value) {
+    _passwordRequestSent = value;
+}
+
 void Client::setNickname(const std::string& nickname) {
     _nickname = nickname;
 }
@@ -57,12 +73,4 @@ void Client::authenticate() {
     if (!_nickname.empty() && !_username.empty()) {
         _authenticated = true;
     }
-}
-
-bool Client::isWelcomeMessageSent() const {
-    return _welcomeMessageSent;
-}
-
-void Client::setWelcomeMessageSent(bool value) {
-    _welcomeMessageSent = value;
 }
