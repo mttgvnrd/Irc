@@ -6,7 +6,7 @@
 /*   By: luigi <luigi@student.42.fr>                +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/09/30 12:15:12 by mgiovana          #+#    #+#             */
-/*   Updated: 2024/10/18 11:46:55 by luigi            ###   ########.fr       */
+/*   Updated: 2024/10/19 10:24:07 by luigi            ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -53,6 +53,9 @@ void Client::setPasswordRequestSent(bool value) {
     _passwordRequestSent = value;
 }
 
+bool Client::isNicknameSet() const {
+    return !_nickname.empty();
+}
 void Client::setNickname(const std::string& nickname) {
     _nickname = nickname;
 }

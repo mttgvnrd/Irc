@@ -6,7 +6,7 @@
 /*   By: luigi <luigi@student.42.fr>                +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/09/30 12:14:47 by mgiovana          #+#    #+#             */
-/*   Updated: 2024/10/18 11:53:18 by luigi            ###   ########.fr       */
+/*   Updated: 2024/10/19 11:15:34 by luigi            ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -298,184 +298,184 @@ void Server::handleCommand(const std::string& command, Client* client) {
     std::string cmd;
     iss >> cmd; // Estrae il comando principale
     
-    if (cmd == "PASS") {
-        // Estrai la password dal comando
-        std::string password;
-        iss >> password;
+    // Verifica se il client è verificato tramite password
+    if (!client->isVerified()) {
+        if (cmd == "PASS") {
+            std::string password;
+            iss >> password;
 
-        // Verifica se la password è vuota
-        if (password.empty()) {
-            sendError(client, "No password provided.");
-            return;
-        }
-
-        // Controlla se la password fornita corrisponde
-        if (password == this->_password) {
-            client->authenticate();
-            client->setVerified(true); // Verifica il client
-
-            // Invia il messaggio di benvenuto solo se non è già stato inviato
-            if (!client->isWelcomeMessageSent()) {
-                std::string welcome_msg = "001 " + client->getNickname() + " :Benvenuto sul server IRC!\n";
-                send(client->getFd(), welcome_msg.c_str(), welcome_msg.size(), 0);
-                client->setWelcomeMessageSent(true);
-            }
-        } else {
-            sendError(client, "Password does not match.");
-        }
-    } else if (!client->isVerified()) {
-        if (!client->isPasswordRequestSent()) {
-            std::cout << "Verifying client FD " << client->getFd() << std::endl;
-            std::string invite_msg = "401  :Please enter your password to verify.\n"; // Sempre senza nickname, visto che non è stato impostato
-
-            // Invia il messaggio al client per richiedere la password
-            send(client->getFd(), invite_msg.c_str(), invite_msg.size(), 0);
-            std::cout << "Server log: Sent password verification request to client FD " << client->getFd() << std::endl;
-
-            // Imposta il flag per evitare l'invio multiplo
-            client->setPasswordRequestSent(true);
-        }
-        return; // Esci dalla funzione se il client non è verificato
-    
-    } else if (cmd == "NICK") {
-        // Logica per gestire il comando NICK
-        std::string nickname;
-        iss >> nickname;
-
-        if (isNicknameInUse(nickname)) {
-            sendError(client, "Nickname " + nickname + " is already in use. Please choose a different name.");
-            std::cerr << "Error: Nickname " << nickname << " already in use." << std::endl;
-            return;
-        }
-        
-        client->setNickname(nickname);
-        _nickname_map[nickname] = client;
-        std::cout << "Client " << client->getFd() << " has set nickname to: " << nickname << std::endl;
-
-        // Verifica se sia `NICK` che `USER` sono impostati
-        client->authenticate();
-        if (client->isAuthenticated() && !client->isWelcomeMessageSent()) {
-            std::cout << "Client " << client->getFd() << " authenticated!" << std::endl;
-            std::string welcome_msg = "001 " + client->getNickname() + " :Benvenuto sul server IRC!\n";
-            send(client->getFd(), welcome_msg.c_str(), welcome_msg.size(), 0);
-            client->setWelcomeMessageSent(true);
-        }
-    } else if (cmd == "USER") {
-        std::string username;
-        iss >> username; // Solo il primo argomento è considerato il nome utente
-        client->setUsername(username);
-        std::cout << "Client " << client->getFd() << " has set username to: " << username << std::endl;
-
-        // Autenticazione del client (richiede sia NICK che USER)
-        client->authenticate();
-        if (client->isAuthenticated() && !client->isWelcomeMessageSent()) {
-            std::cout << "Client " << client->getFd() << " authenticated!" << std::endl;
-            std::string welcome_msg = "001 " + client->getNickname() + " :Benvenuto sul server IRC!\n";
-            send(client->getFd(), welcome_msg.c_str(), welcome_msg.size(), 0);
-            client->setWelcomeMessageSent(true); // Imposta che il messaggio è stato inviato
-        }
-    } else if (cmd == "JOIN") {
-        std::string channelName;
-        iss >> channelName;
-        if (channelName.empty()) {
-            sendError(client, "No channel name provided.");
-            return;
-        }
-        handleJoinCommand(client, channelName);
-    } else if (cmd == "PART") {//USCITA DAL CANALE
-        std::string channelName;
-        iss >> channelName;
-
-        if (channelName.empty()) {
-            sendError(client, "No channel name provided.");
-            return;
-            }
-        
-        // Gestisci la logica di uscita dal canale
-        //handlePartCommand(client, channelName);
-    } else if (cmd == "PRIVMSG") {
-
-        if (!client->isVerified()){
-            std::cerr << "Error: client " << client->getFd() << " is not verified." << std::endl;
-            std::string error_msg = "Error: you aren't verified.\n";
-            send(client->getFd(), error_msg.c_str(), error_msg.size(), 0);
-            return;
-        }
-
-        std::string target;
-        std::string message;
-
-        // Estrazione del target (nickname o canale)
-        iss >> target;
-        
-        // Controllo se è stato specificato un destinatario
-        if (target.empty()) {
-            std::cerr << "Errore: destinatario non specificato per PRIVMSG." << std::endl;
-            return;
-        }
-
-        // Estrazione del messaggio
-        iss >> message;
-        if (!message.empty() && message[0] == ':') {
-            message.erase(0, 1);
-            std::string rest_of_message;
-            std::getline(iss, rest_of_message);
-            message += rest_of_message;
-        }
-
-        // Gestione messaggi verso un canale
-        if (_channels.find(target) != _channels.end()) {
-            Channel* channel = _channels[target];
-
-            // Verifica se il client è un membro del canale
-            if (channel->isMember(client)) {
-                std::string fullMsg = ":" + client->getNickname() + " PRIVMSG " + target + " :" + message + "\n";
-                channel->broadcastMessage(fullMsg, client);  // Invia il messaggio a tutti i membri del canale
-                std::cout << "Messaggio da " << client->getNickname() << " nel canale " << target << ": " << message << std::endl;
-            } else {
-                std::string errorMsg = "ERR_CANNOTSENDTOCHAN " + target + " :You are not on that channel.\n";
-                send(client->getFd(), errorMsg.c_str(), errorMsg.size(), 0);
-            }
-        }
-        // Gestione messaggi verso un altro client
-        else {
-            Client* target_client = nullptr;
-
-            // Cerca il client destinatario
-            for (std::map<int, Client*>::iterator it = _clients_map.begin(); it != _clients_map.end(); ++it) {
-                if (it->second->getNickname() == target) {
-                    target_client = it->second;
-                    break;
-                }
-            }
-
-            // Verifica se il destinatario esiste
-            if (target_client == nullptr) {
-                std::cerr << "Errore: Il destinatario " << target << " non esiste." << std::endl;
+            if (password.empty()) {
+                sendError(client, "No password provided.");
                 return;
             }
 
-            // Invia il messaggio al client
-            std::string full_message = ":" + client->getNickname() + " PRIVMSG " + target + " :" + message + "\n";
-            send(target_client->getFd(), full_message.c_str(), full_message.size(), 0);
-            std::cout << "Messaggio privato da " << client->getNickname() << " a " << target << ": " << message << std::endl;
+            if (password == this->_password) {
+                client->setVerified(true); // Verifica il client
+                const char* msg = "Password accepted. Please provide your nickname.\n";
+                send(client->getFd(), msg, strlen(msg), 0);
+            } else {
+                sendError(client, "Password does not match.");
+            }
+        } else if (!client->isPasswordRequestSent()) {
+            std::string invite_msg = "401 :Please enter your password to verify.\n";
+            send(client->getFd(), invite_msg.c_str(), invite_msg.size(), 0);
+            client->setPasswordRequestSent(true);
         }
-    }
-    else if (cmd == "CAP") {
-        if (!client->isVerified()){
-            std::cerr << "Error: client " << client->getFd() << " is not verified." << std::endl;
-            std::string error_msg = "Error: you aren't verified.\n";
-            send(client->getFd(), error_msg.c_str(), error_msg.size(), 0);
-            return;
+        return;
+        } else if (cmd == "NICK") { // Gestione del comando NICK
+            std::string nickname;
+            iss >> nickname;
+
+            if (nickname.empty()) {
+                sendError(client, "No nickname provided. Please choose a nickname.");
+                return;
+            }
+
+            if (isNicknameInUse(nickname)) {
+                sendError(client, "Nickname " + nickname + " is already in use. Please choose a different name.");
+                return;
+            }
+
+            client->setNickname(nickname);
+            _nickname_map[nickname] = client;
+            std::cout << "Client " << client->getFd() << " has set nickname to: " << nickname << std::endl;
+
+            // Invita il client a inserire lo username dopo il nickname
+            std::string invite_msg = "001 " + nickname + " :Please provide your username to proceed.\n";
+            send(client->getFd(), invite_msg.c_str(), invite_msg.size(), 0);
+
+            // Controllo se il client è già autenticato (richiede anche lo USER)
+            client->authenticate();
+        } else if (cmd == "USER") { // Gestione del comando USER
+            if (!client->isNicknameSet()) {
+                std::string invite_msg = "431 :Please insert your Nickname before providing a username.\n";
+                send(client->getFd(), invite_msg.c_str(), invite_msg.size(), 0);
+                return;
+            }
+
+            std::string username;
+            iss >> username;
+
+            if (username.empty()) {
+                sendError(client, "No username provided. Please provide a username.");
+                return;
+            }
+
+            client->setUsername(username);
+            std::cout << "Client " << client->getFd() << " has set username to: " << username << std::endl;
+
+            // Controllo se il client è autenticato
+            client->authenticate();
+
+            if (client->isAuthenticated() && !client->isWelcomeMessageSent()) {
+                if (client->isAuthenticated() && !client->isWelcomeMessageSent()) {
+                std::string welcome_msg = ":server 001 " + client->getNickname() + " :Welcome to the IRC server, " + client->getNickname() + "!\n";
+                send(client->getFd(), welcome_msg.c_str(), welcome_msg.size(), 0);
+                client->setWelcomeMessageSent(true);
+            }
+        } else if (cmd == "JOIN") {
+            std::string channelName;
+            iss >> channelName;
+            if (channelName.empty()) {
+                sendError(client, "No channel name provided.");
+                return;
+            }
+            handleJoinCommand(client, channelName);
+        } else if (cmd == "PART") {//USCITA DAL CANALE
+            std::string channelName;
+            iss >> channelName;
+
+            if (channelName.empty()) {
+                sendError(client, "No channel name provided.");
+                return;
+                }
+            
+            // Gestisci la logica di uscita dal canale
+            //handlePartCommand(client, channelName);
+        } else if (cmd == "PRIVMSG") {
+
+            if (!client->isVerified()){
+                std::cerr << "Error: client " << client->getFd() << " is not verified." << std::endl;
+                std::string error_msg = "Error: you aren't verified.\n";
+                send(client->getFd(), error_msg.c_str(), error_msg.size(), 0);
+                return;
+            }
+
+            std::string target;
+            std::string message;
+
+            // Estrazione del target (nickname o canale)
+            iss >> target;
+            
+            // Controllo se è stato specificato un destinatario
+            if (target.empty()) {
+                std::cerr << "Errore: destinatario non specificato per PRIVMSG." << std::endl;
+                return;
+            }
+
+            // Estrazione del messaggio
+            iss >> message;
+            if (!message.empty() && message[0] == ':') {
+                message.erase(0, 1);
+                std::string rest_of_message;
+                std::getline(iss, rest_of_message);
+                message += rest_of_message;
+            }
+
+            // Gestione messaggi verso un canale
+            if (_channels.find(target) != _channels.end()) {
+                Channel* channel = _channels[target];
+
+                // Verifica se il client è un membro del canale
+                if (channel->isMember(client)) {
+                    std::string fullMsg = ":" + client->getNickname() + " PRIVMSG " + target + " :" + message + "\n";
+                    channel->broadcastMessage(fullMsg, client);  // Invia il messaggio a tutti i membri del canale
+                    std::cout << "Messaggio da " << client->getNickname() << " nel canale " << target << ": " << message << std::endl;
+                } else {
+                    std::string errorMsg = "ERR_CANNOTSENDTOCHAN " + target + " :You are not on that channel.\n";
+                    send(client->getFd(), errorMsg.c_str(), errorMsg.size(), 0);
+                }
+            }
+            // Gestione messaggi verso un altro client
+            else {
+                Client* target_client = nullptr;
+
+                // Cerca il client destinatario
+                for (std::map<int, Client*>::iterator it = _clients_map.begin(); it != _clients_map.end(); ++it) {
+                    if (it->second->getNickname() == target) {
+                        target_client = it->second;
+                        break;
+                    }
+                }
+
+                // Verifica se il destinatario esiste
+                if (target_client == nullptr) {
+                    std::cerr << "Errore: Il destinatario " << target << " non esiste." << std::endl;
+                    return;
+                }
+
+                // Invia il messaggio al client
+                std::string full_message = ":" + client->getNickname() + " PRIVMSG " + target + " :" + message + "\n";
+                send(target_client->getFd(), full_message.c_str(), full_message.size(), 0);
+                std::cout << "Messaggio privato da " << client->getNickname() << " a " << target << ": " << message << std::endl;
+            }
         }
-        // Ignora il comando CAP senza alcun output
-        ;
-    }
-    else if (cmd == "QUIT") {
-        handleQuitCommand(client);
-    }
-    else {
-        sendError(client, "Unknown command.");
+        else if (cmd == "CAP") {
+            if (!client->isVerified()){
+                std::cerr << "Error: client " << client->getFd() << " is not verified." << std::endl;
+                std::string error_msg = "Error: you aren't verified.\n";
+                send(client->getFd(), error_msg.c_str(), error_msg.size(), 0);
+                return;
+            }
+            // Ignora il comando CAP senza alcun output
+            ;
+        }
+        else if (cmd == "QUIT") {
+            handleQuitCommand(client);
+        }
+        else {
+            sendError(client, "Unknown command.");
+        }
     }
 }
 

@@ -6,7 +6,7 @@
 /*   By: luigi <luigi@student.42.fr>                +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/09/30 12:15:17 by mgiovana          #+#    #+#             */
-/*   Updated: 2024/10/18 11:52:16 by luigi            ###   ########.fr       */
+/*   Updated: 2024/10/19 10:21:19 by luigi            ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -31,6 +31,7 @@ public:
     void setPasswordRequestSent(bool value); // Metodo
    
     void setWelcomeMessageSent(bool value);
+    bool isNicknameSet() const;
     void setNickname(const std::string& nickname);
     void setUsername(const std::string& username);
     void setVerified(bool verified);
