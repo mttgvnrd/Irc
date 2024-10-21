@@ -131,29 +131,33 @@ void Server::stop() {
 }
 
 void Server::handleJoinCommand(Client* client, const std::string& channelName) {
+    std::string formattedChannelName = channelName;
+    if (channelName[0] != '#') {
+        formattedChannelName = "#" + channelName;
+    }
 
     Channel* channel;
 
     // Se il canale non esiste, crealo
-    if (_channels.find(channelName) == _channels.end()) {
-        channel = new Channel(channelName, client);  // Il creatore è il primo membro e l'operatore
-        _channels[channelName] = channel;
-        _channels.insert(std::make_pair(channelName, channel));
-        std::cout << "Channel " << channelName << " created by " << client->getNickname() << std::endl;
+    if (_channels.find(formattedChannelName) == _channels.end()) {
+        channel = new Channel(formattedChannelName, client);  // Il creatore è il primo membro e l'operatore
+        _channels[formattedChannelName] = channel;
+        std::cout << "Channel " << formattedChannelName << " created by " << client->getNickname() << std::endl;
     } else {
-        channel = _channels[channelName];
+        channel = _channels[formattedChannelName];
     }
 
     // Aggiungi il client al canale se non è pieno
     if (channel->addMember(client)) {
-        std::string joinMsg = ":" + client->getNickname() + " JOIN " + channelName + "\n";
+        std::string joinMsg = ":" + client->getNickname() + " JOIN " + formattedChannelName + "\r\n";      
         channel->broadcastMessage(joinMsg, client);  // Invia il messaggio di JOIN agli altri membri
-        std::cout << "Client " << client->getNickname() << " joined to channel " << channelName << std::endl;
+        std::cout << "Client " << client->getNickname() << " joined channel " << formattedChannelName << std::endl;
     } else {
-        std::string errorMsg = "ERR_CHANNELFULL " + channelName + " :Cannot join channel, it is full.\n";
+        std::string errorMsg = "ERR_CHANNELFULL " + formattedChannelName + " :Cannot join channel, it is full.\r\n"; 
         send(client->getFd(), errorMsg.c_str(), errorMsg.size(), 0);
     }
 }
+
 
 // Accettare nuove connessioni
 void Server::acceptNewClient() {
@@ -309,12 +313,80 @@ void Server::handleCommand(const std::string& command, Client* client) {
         _nickname_map[nickname] = client;
         std::cout << "Client " << client->getFd() << " has set nickname to: " << nickname << std::endl;
         client->authenticate();
-         if (client->isAuthenticated() && !client->isWelcomeMessageSent()) {
+         if (client->isAuthenticated() && !client->isWelcomeMessageSent()) 
+        {
         std::cout << "Client " << client->getFd() << " authenticated!" << std::endl;
         std::string welcome_msg = "001 " + client->getNickname() + " :Benvenuto sul server IRC!\n";
         send(client->getFd(), welcome_msg.c_str(), welcome_msg.size(), 0);
         client->setWelcomeMessageSent(true);  // Imposta che il messaggio è stato inviato
+        }
     }
+    else if (cmd == "KICK") {
+        std::string channelName, targetNickname;
+        iss >> channelName >> targetNickname;
+
+        if (_channels.find(channelName) != _channels.end()) {
+            Channel* channel = _channels[channelName];
+            Client* target = _nickname_map[targetNickname];
+
+            if (target && channel->isMember(target)) {
+                channel->kick(client, target);
+            } else {
+                sendError(client, "User not found in channel");
+            }
+        } else {
+            sendError(client, "Channel not found");
+        }
+    }
+
+    else if (cmd == "INVITE") {
+        std::string channelName, targetNickname;
+        iss >> channelName >> targetNickname;
+
+        if (_channels.find(channelName) != _channels.end()) {
+            Channel* channel = _channels[channelName];
+            Client* target = _nickname_map[targetNickname];
+
+            if (target && !channel->isMember(target)) {
+                channel->invite(client, target);
+            } else {
+                sendError(client, "User already in channel or not found");
+            }
+        } else {
+            sendError(client, "Channel not found");
+        }
+    }
+
+    else if (cmd == "TOPIC") {
+        std::string channelName, newTopic;
+        iss >> channelName;
+        std::getline(iss, newTopic);
+
+        if (_channels.find(channelName) != _channels.end()) {
+            Channel* channel = _channels[channelName];
+
+            if (!newTopic.empty()) {
+                channel->setTopic(newTopic, client);
+            } else {
+                send(client->getFd(), channel->getTopic().c_str(), channel->getTopic().size(), 0);
+            }
+        } else {
+            sendError(client, "Channel not found");
+        }
+    }
+
+    else if (cmd == "MODE") {
+        std::string channelName;
+        char mode;
+        bool enable;
+        iss >> channelName >> mode >> enable;
+
+        if (_channels.find(channelName) != _channels.end()) {
+            Channel* channel = _channels[channelName];
+            channel->changeMode(client, mode, enable);
+        } else {
+            sendError(client, "Channel not found");
+        }
     }
     else if (cmd == "USER") {
         
@@ -383,19 +455,26 @@ void Server::handleCommand(const std::string& command, Client* client) {
         }
 
         // Gestione messaggi verso un canale
+       if (!target.empty() && target[0] == '#') {
+        // Gestione messaggi verso un canale
         if (_channels.find(target) != _channels.end()) {
             Channel* channel = _channels[target];
 
             // Verifica se il client è un membro del canale
             if (channel->isMember(client)) {
-                std::string fullMsg = ":" + client->getNickname() + " PRIVMSG " + target + " :" + message + "\n";
+                // Assicurati di inviare il messaggio nel formato corretto per HexChat
+                std::string fullMsg = ":" + client->getNickname() + " PRIVMSG " + target + " :" + message + "\r\n";
                 channel->broadcastMessage(fullMsg, client);  // Invia il messaggio a tutti i membri del canale
                 std::cout << "Messaggio da " << client->getNickname() << " nel canale " << target << ": " << message << std::endl;
             } else {
                 std::string errorMsg = "ERR_CANNOTSENDTOCHAN " + target + " :You are not on that channel.\n";
                 send(client->getFd(), errorMsg.c_str(), errorMsg.size(), 0);
             }
+        } else {
+            std::string errorMsg = "ERR_NOSUCHCHANNEL " + target + " :No such channel.\n";
+            send(client->getFd(), errorMsg.c_str(), errorMsg.size(), 0);
         }
+    }
         // Gestione messaggi verso un altro client
         else {
             Client* target_client = nullptr;
@@ -415,7 +494,7 @@ void Server::handleCommand(const std::string& command, Client* client) {
             }
 
             // Invia il messaggio al client
-            std::string full_message = ":" + client->getNickname() + " PRIVMSG " + target + " :" + message + "\n";
+            std::string full_message = ":" + client->getNickname() + " PRIVMSG " + target + " :" + message + "\r\n";
             send(target_client->getFd(), full_message.c_str(), full_message.size(), 0);
             std::cout << "Messaggio privato da " << client->getNickname() << " a " << target << ": " << message << std::endl;
         }
@@ -427,6 +506,7 @@ void Server::handleCommand(const std::string& command, Client* client) {
             send(client->getFd(), error_msg.c_str(), error_msg.size(), 0);
             return;
         }
+    
     // Ignora il comando CAP senza alcun output
     ;
     }

@@ -18,7 +18,6 @@
 #include "Client.hpp"
 #include <iostream>
 
-
 class Channel {
 private:
     std::string _name;
@@ -27,6 +26,7 @@ private:
     std::map<Client*, bool> _operators;
     int _userLimit;
     bool _inviteOnly;
+    bool _topicRestriction;  // modalità t
 
 public:
     Channel(const std::string& name, Client* creator);
@@ -40,17 +40,27 @@ public:
     void removeMember(Client* client);
 
     // Verifica se un utente è operatore
-    bool isOperator(Client* client) const ;
+    bool isOperator(Client* client) const;
 
     // Imposta il topic del canale
-    void setTopic(const std::string& topic, Client* client) ;
+    void setTopic(const std::string& topic, Client* client);
 
     // Ottieni il topic
-    const std::string& getTopic() const;
+    const std::string& getTopic() const { return _topic; };
 
     // Invia un messaggio a tutti i membri
     void broadcastMessage(const std::string& message, Client* sender);
 
+    // Funzioni per gestire comandi specifici agli operatori
+    void kick(Client* client, Client* target);
+    void invite(Client* client, Client* target);
+    void changeMode(Client* client, char mode, bool enable);
+
+    // Verifica se un canale è a invito
+    bool isInviteOnly() const;
+
     bool isMember(Client* client) const;
 
+    // Altre funzioni...
 };
+

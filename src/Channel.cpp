@@ -64,3 +64,42 @@ void Channel::setTopic(const std::string& topic, Client* client) {
         std::cerr << "Errore: Il client " << client->getNickname() << " non ha i permessi per cambiare il topic." << std::endl;
     }
 }
+
+// Comando KICK
+void Channel::kick(Client* client, Client* target) {
+    if (isOperator(client)) {
+        removeMember(target);
+        std::string kickMsg = ":" + client->getNickname() + " KICK " + _name + " " + target->getNickname() + "\n";
+        broadcastMessage(kickMsg, client);
+        std::cout << "Client " << target->getNickname() << " kicked from channel " << _name << std::endl;
+    } else {
+        std::cerr << "Errore: " << client->getNickname() << " non ha i permessi per eseguire il comando KICK." << std::endl;
+    }
+}
+
+// Comando INVITE
+void Channel::invite(Client* client, Client* target) {
+    if (isOperator(client)) {
+        std::string inviteMsg = ":" + client->getNickname() + " INVITE " + target->getNickname() + " " + _name + "\n";
+        send(target->getFd(), inviteMsg.c_str(), inviteMsg.size(), 0);
+        std::cout << "Client " << target->getNickname() << " è stato invitato al canale " << _name << std::endl;
+    } else {
+        std::cerr << "Errore: " << client->getNickname() << " non ha i permessi per eseguire il comando INVITE." << std::endl;
+    }
+}
+
+// Comando MODE
+void Channel::changeMode(Client* client, char mode, bool enable) {
+    if (isOperator(client)) {
+        if (mode == 'i') {
+            _inviteOnly = enable;
+            std::cout << "La modalità invite-only del canale " << _name << " è stata " << (enable ? "abilitata" : "disabilitata") << std::endl;
+        } else if (mode == 't') {
+            _topicRestriction = enable;
+            std::cout << "La restrizione del topic del canale " << _name << " è stata " << (enable ? "abilitata" : "disabilitata") << std::endl;
+        }
+    } else {
+        std::cerr << "Errore: " << client->getNickname() << " non ha i permessi per eseguire il comando MODE." << std::endl;
+    }
+}
+
