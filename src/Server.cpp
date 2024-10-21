@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   Server.cpp                                         :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: larmogid <larmogid@student.42.fr>          +#+  +:+       +#+        */
+/*   By: luigi <luigi@student.42.fr>                +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/09/30 12:14:47 by mgiovana          #+#    #+#             */
-/*   Updated: 2024/10/16 15:25:54 by larmogid         ###   ########.fr       */
+/*   Updated: 2024/10/22 00:07:45 by luigi            ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -158,6 +158,18 @@ void Server::handleJoinCommand(Client* client, const std::string& channelName) {
     }
 }
 
+void Server::inviteNewClientToAuthenticate(int new_client_fd) {
+    std::cout << "Ignoring CAP...: " << std::endl;
+
+    // Costruzione del messaggio di autenticazione
+    std::string auth_msg = ":server NOTICE Client :"
+                           "Please enter Password (\"/PASS <password>\") first, "
+                           "then provide Nickname (\"/NICK <nickname>\") and Username (\"/USER <username>\") "
+                           "in any order.\r\n";
+
+    // Invia il messaggio al client
+    send(new_client_fd, auth_msg.c_str(), auth_msg.size(), 0);
+}
 
 // Accettare nuove connessioni
 void Server::acceptNewClient() {
@@ -178,14 +190,7 @@ void Server::acceptNewClient() {
     _clients_map[new_client_fd] = new_client;
 
     std::cout << "New client connected! FD: " << new_client_fd << std::endl;
-    std::cout << "Ignoring CAP...: " << std::endl;
-    std::string password_msg = "Please enter Password (\"/PASS <password>\")\r\n"; // DEBUG
-    send(new_client_fd, password_msg.c_str(), password_msg.size(), 0); // DEBUG
-    std::string msg = "to verify Client and then enter Nickname (\"/NICK <nickname>\")\r\n"; // DEBUG
-    send(new_client_fd, msg.c_str(), msg.size(), 0); // DEBUG
-    std::string name_msg = "and Username (\"/USER <username>\") to authenticate\r\n"; // DEBUG
-    send(new_client_fd, name_msg.c_str(), name_msg.size(), 0); // DEBUG
-
+    inviteNewClientToAuthenticate(new_client_fd);
 }
 
 // Gestione dei messaggi del client
@@ -294,7 +299,7 @@ void Server::handleCommand(const std::string& command, Client* client) {
             std::cout << "Client " << client->getFd() << " verified successfully." << std::endl;
 
             // Invia un messaggio di benvenuto o conferma al client
-           // std::string welcome_msg = "001 " + client->getNickname() + " :Welcome to the IRC server!\n";
+            // std::string welcome_msg = "001 " + client->getNickname() + " :Welcome to the IRC server!\n";
             //send(client->getFd(), welcome_msg.c_str(), welcome_msg.size(), 0);
             return ;
         }
@@ -306,7 +311,7 @@ void Server::handleCommand(const std::string& command, Client* client) {
 
         if (!client->isVerified()){
             std::cerr << "Error: client " << client->getFd() << " is not verified." << std::endl;
-            std::string error_msg = "Error: you aren't verified.\r\n";
+            std::string error_msg = ":server NOTICE :Error: You're not verified.\r\n";
             send(client->getFd(), error_msg.c_str(), error_msg.size(), 0);
             return;
         }
@@ -392,7 +397,7 @@ void Server::handleCommand(const std::string& command, Client* client) {
         
         if (!client->isVerified()){
             std::cerr << "Error: client " << client->getFd() << " is not verified." << std::endl;
-            std::string error_msg = "Error: you aren't verified.\r\n";
+            std::string error_msg = ":server NOTICE :Error: You're not verified.\r\n";
             send(client->getFd(), error_msg.c_str(), error_msg.size(), 0);
             return;
         }
@@ -414,7 +419,7 @@ void Server::handleCommand(const std::string& command, Client* client) {
 
         if (!client->isVerified()){
             std::cerr << "Error: client " << client->getFd() << " is not verified." << std::endl;
-            std::string error_msg = "Error: you aren't verified.\r\n";
+            std::string error_msg = ":server NOTICE :Error: You're not verified.\r\n";
             send(client->getFd(), error_msg.c_str(), error_msg.size(), 0);
             return;
         }
@@ -426,7 +431,7 @@ void Server::handleCommand(const std::string& command, Client* client) {
 
         if (!client->isVerified()){
             std::cerr << "Error: client " << client->getFd() << " is not verified." << std::endl;
-            std::string error_msg = "Error: you aren't verified.\r\n";
+            std::string error_msg = ":server NOTICE :Error: You're not verified.\r\n";
             send(client->getFd(), error_msg.c_str(), error_msg.size(), 0);
             return;
         }
@@ -439,7 +444,7 @@ void Server::handleCommand(const std::string& command, Client* client) {
         
         // Controllo se è stato specificato un destinatario
         if (target.empty()) {
-            std::cerr << "EError: no recipient specified for PRIVMSG." << std::endl;
+            std::cerr << "Error: no recipient specified for PRIVMSG." << std::endl;
             return;
         }
 
@@ -495,15 +500,7 @@ void Server::handleCommand(const std::string& command, Client* client) {
             std::cout << "Private message by " << client->getNickname() << " to " << target << ": " << message << std::endl;
         }
     } else if (cmd == "CAP") {
-        if (!client->isVerified()){
-            std::cerr << "Error: client " << client->getFd() << " is not verified." << std::endl;
-            std::string error_msg = "Error: you aren't verified.\r\n";
-            send(client->getFd(), error_msg.c_str(), error_msg.size(), 0);
-            return;
-        }
-
-    // Ignora il comando CAP senza alcun output
-
+        return ;
     } else if (cmd == "QUIT") {
         handleQuitCommand(client);
         return;  // Interrompi l'elaborazione del comando
