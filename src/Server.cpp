@@ -6,7 +6,7 @@
 /*   By: luigi <luigi@student.42.fr>                +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/09/30 12:14:47 by mgiovana          #+#    #+#             */
-/*   Updated: 2024/10/19 11:15:34 by luigi            ###   ########.fr       */
+/*   Updated: 2024/10/21 08:59:50 by luigi            ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -157,7 +157,7 @@ void Server::handlePartCommand(Client* client, const std::string& channelName) {
     }
 
     channel->removeMember(client);
-    std::string partMsg = ":" + client->getNickname() + " PART " + channelName + "\n";
+    std::string partMsg = ":" + client->getNickname() + " PART " + channelName + "\r\n";
     channel->broadcastMessage(partMsg, client);
     std::cout << "Client " << client->getNickname() << " left channel " << channelName << std::endl;
 }
@@ -178,11 +178,11 @@ void Server::handleJoinCommand(Client* client, const std::string& channelName) {
 
     // Aggiungi il client al canale se non è pieno
     if (channel->addMember(client)) {
-        std::string joinMsg = ":" + client->getNickname() + " JOIN " + channelName + "\n";
+        std::string joinMsg = ":" + client->getNickname() + " JOIN " + channelName + "\r\n";
         channel->broadcastMessage(joinMsg, client);  // Invia il messaggio di JOIN agli altri membri
         std::cout << "Client " << client->getNickname() << " joined to channel " << channelName << std::endl;
     } else {
-        std::string errorMsg = "ERR_CHANNELFULL " + channelName + " :Cannot join channel, it is full.\n";
+        std::string errorMsg = "ERR_CHANNELFULL " + channelName + " :Cannot join channel, it is full.\r\n";
         send(client->getFd(), errorMsg.c_str(), errorMsg.size(), 0);
     }
 }
@@ -240,6 +240,9 @@ void Server::handleClientMessage(int client_fd) {
     buffer[bytes_received] = '\0';  // Termina la stringa ricevuta
     std::string command(buffer);
 
+    //---------------------------------------------------------------------------------------> Stampa il messaggio ricevuto come debug, limitato ai byte ricevuti
+    std::cout << "Debug: Received message from client FD " << client_fd << ": " << buffer << std::endl;
+    
     // Processa il comando ricevuto
     try {
         handleCommand(command, _clients_map[client_fd]);
@@ -311,13 +314,13 @@ void Server::handleCommand(const std::string& command, Client* client) {
 
             if (password == this->_password) {
                 client->setVerified(true); // Verifica il client
-                const char* msg = "Password accepted. Please provide your nickname.\n";
+                const char* msg = "Password accepted. Please provide your nickname.\r\n";
                 send(client->getFd(), msg, strlen(msg), 0);
             } else {
                 sendError(client, "Password does not match.");
             }
         } else if (!client->isPasswordRequestSent()) {
-            std::string invite_msg = "401 :Please enter your password to verify.\n";
+            std::string invite_msg = "464 :Please enter your password to verify.\r\n";
             send(client->getFd(), invite_msg.c_str(), invite_msg.size(), 0);
             client->setPasswordRequestSent(true);
         }
@@ -341,14 +344,14 @@ void Server::handleCommand(const std::string& command, Client* client) {
             std::cout << "Client " << client->getFd() << " has set nickname to: " << nickname << std::endl;
 
             // Invita il client a inserire lo username dopo il nickname
-            std::string invite_msg = "001 " + nickname + " :Please provide your username to proceed.\n";
+            std::string invite_msg = "461 " + nickname + " :Please provide your Username to proceed.\r\n";
             send(client->getFd(), invite_msg.c_str(), invite_msg.size(), 0);
 
             // Controllo se il client è già autenticato (richiede anche lo USER)
             client->authenticate();
         } else if (cmd == "USER") { // Gestione del comando USER
             if (!client->isNicknameSet()) {
-                std::string invite_msg = "431 :Please insert your Nickname before providing a username.\n";
+                std::string invite_msg = "461 " + client->getNickname() + " :Please insert your Nickname before providing a username.\r\n";
                 send(client->getFd(), invite_msg.c_str(), invite_msg.size(), 0);
                 return;
             }
@@ -369,7 +372,9 @@ void Server::handleCommand(const std::string& command, Client* client) {
 
             if (client->isAuthenticated() && !client->isWelcomeMessageSent()) {
                 if (client->isAuthenticated() && !client->isWelcomeMessageSent()) {
-                std::string welcome_msg = ":server 001 " + client->getNickname() + " :Welcome to the IRC server, " + client->getNickname() + "!\n";
+                std::string welcome_msg = ":server 001 " + client->getNickname() + " :Welcome to the IRC server, " + client->getNickname() + "!\r\n";
+                std::cout << "Welcome message: " << welcome_msg << std::endl; // Debug
+
                 send(client->getFd(), welcome_msg.c_str(), welcome_msg.size(), 0);
                 client->setWelcomeMessageSent(true);
             }
@@ -428,11 +433,11 @@ void Server::handleCommand(const std::string& command, Client* client) {
 
                 // Verifica se il client è un membro del canale
                 if (channel->isMember(client)) {
-                    std::string fullMsg = ":" + client->getNickname() + " PRIVMSG " + target + " :" + message + "\n";
+                    std::string fullMsg = ":" + client->getNickname() + " PRIVMSG " + target + " :" + message + "\r\n";
                     channel->broadcastMessage(fullMsg, client);  // Invia il messaggio a tutti i membri del canale
                     std::cout << "Messaggio da " << client->getNickname() << " nel canale " << target << ": " << message << std::endl;
                 } else {
-                    std::string errorMsg = "ERR_CANNOTSENDTOCHAN " + target + " :You are not on that channel.\n";
+                    std::string errorMsg = "ERR_CANNOTSENDTOCHAN " + target + " :You are not on that channel.\r\n";
                     send(client->getFd(), errorMsg.c_str(), errorMsg.size(), 0);
                 }
             }
@@ -455,7 +460,7 @@ void Server::handleCommand(const std::string& command, Client* client) {
                 }
 
                 // Invia il messaggio al client
-                std::string full_message = ":" + client->getNickname() + " PRIVMSG " + target + " :" + message + "\n";
+                std::string full_message = ":" + client->getNickname() + " PRIVMSG " + target + " :" + message + "\r\n";
                 send(target_client->getFd(), full_message.c_str(), full_message.size(), 0);
                 std::cout << "Messaggio privato da " << client->getNickname() << " a " << target << ": " << message << std::endl;
             }
