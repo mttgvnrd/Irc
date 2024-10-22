@@ -6,7 +6,7 @@
 /*   By: larmogid <larmogid@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/09/30 12:14:47 by mgiovana          #+#    #+#             */
-/*   Updated: 2024/10/22 11:26:27 by larmogid         ###   ########.fr       */
+/*   Updated: 2024/10/22 11:28:18 by larmogid         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -162,7 +162,7 @@ void inviteClientToAuthenticate(int new_client_fd) {
 
     // Costruzione del messaggio di autenticazione
     std::string auth_msg = ":server NOTICE Client :"
-                           "Please enter /PASS <password> first, then insert"
+                           "Please enter /PASS <password> first, then insert "
                            "/NICK <nickname> and /USER <username> in any order.\r\n";
 
     // Invia il messaggio al client
