@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   Server.cpp                                         :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: luigi <luigi@student.42.fr>                +#+  +:+       +#+        */
+/*   By: larmogid <larmogid@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/09/30 12:14:47 by mgiovana          #+#    #+#             */
-/*   Updated: 2024/10/22 09:10:20 by luigi            ###   ########.fr       */
+/*   Updated: 2024/10/22 11:26:27 by larmogid         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -157,7 +157,7 @@ void Server::handleJoinCommand(Client* client, const std::string& channelName) {
     }
 }
 
-void Server::inviteNewClientToAuthenticate(int new_client_fd) {
+void inviteClientToAuthenticate(int new_client_fd) {
     std::cout << "Ignoring CAP...: " << std::endl;
 
     // Costruzione del messaggio di autenticazione
@@ -188,7 +188,7 @@ void Server::acceptNewClient() {
     _clients_map[new_client_fd] = new_client;
 
     std::cout << "New client connected! FD: " << new_client_fd << std::endl;
-    inviteNewClientToAuthenticate(new_client_fd);
+    inviteClientToAuthenticate(new_client_fd);
 }
 
 // Gestione dei messaggi del client
