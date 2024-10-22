@@ -6,7 +6,7 @@
 /*   By: luigi <luigi@student.42.fr>                +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/09/30 12:14:47 by mgiovana          #+#    #+#             */
-/*   Updated: 2024/10/22 00:07:45 by luigi            ###   ########.fr       */
+/*   Updated: 2024/10/22 09:10:20 by luigi            ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -33,7 +33,6 @@ Server::Server(int port, const std::string& password)
     createSocket();
     bindSocket();
 }
-
 
 // Distruttore
 Server::~Server() {
@@ -163,9 +162,8 @@ void Server::inviteNewClientToAuthenticate(int new_client_fd) {
 
     // Costruzione del messaggio di autenticazione
     std::string auth_msg = ":server NOTICE Client :"
-                           "Please enter Password (\"/PASS <password>\") first, "
-                           "then provide Nickname (\"/NICK <nickname>\") and Username (\"/USER <username>\") "
-                           "in any order.\r\n";
+                           "Please enter /PASS <password> first, then insert"
+                           "/NICK <nickname> and /USER <username> in any order.\r\n";
 
     // Invia il messaggio al client
     send(new_client_fd, auth_msg.c_str(), auth_msg.size(), 0);
