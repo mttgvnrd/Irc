@@ -3,73 +3,105 @@
 /*                                                        :::      ::::::::   */
 /*   Server.hpp                                         :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: larmogid <larmogid@student.42.fr>          +#+  +:+       +#+        */
+/*   By: luigi <luigi@student.42.fr>                +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2024/09/30 12:14:52 by mgiovana          #+#    #+#             */
-/*   Updated: 2024/10/16 15:54:04 by larmogid         ###   ########.fr       */
+/*   Created: 2024/11/06 14:47:01 by larmogid          #+#    #+#             */
+/*   Updated: 2024/11/08 09:38:35 by luigi            ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
+#ifndef SERVER_HPP 
+#define SERVER_HPP 
 
-#ifndef SERVER_HPP
-#define SERVER_HPP
-
-#include <iostream>
-#include <string>
-#include <sstream>
-#include <limits.h>
+#include <map>
 #include <vector>
-#include <sys/socket.h>
+#include <iostream>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <unistd.h>
 #include <poll.h>
-#include <cstring>
-#include <fcntl.h>
-#include <cstdio>
-#include <algorithm>
-#include <map>
-#include "Client.hpp"
-#include "Channel.hpp"
+#include "HandleErrors.hpp"
 
-class Server {
-public:
-    Server(int port, const std::string& password);
-    ~Server();
+class Channel;
 
-    void start();
-    void stop();
-    void handleClientMessage(int client_fd);
-    void handleJoinCommand(Client* client, const std::string& channelName);
-    void handlePrivMsgCommand(Client* client, const std::string& target, const std::string& message);
-    void handleQuitCommand(Client* client);
+class ClientInstance;
 
-private:
-    int _server_fd;
-    int _port;
-    std::string _password;
-    struct sockaddr_in _address;
-    
-    std::vector<pollfd> _poll_fds;   // Lista dei file descriptor per il polling
-    std::vector<int> _clients;       // Lista dei client connessi
-    std::map<std::string, Channel*> _channels;  // Mappa per gestire i canali
-    std::map<std::string, Client*> _nickname_map; // Per gestire i nickname
-    std::map<int, Client*> _clients_map;   // Associa file descriptor a Client
+class Server
+{
+	private:
+		Server(void);
 
-    void handleCommand(const std::string& command, Client* client);
-    void sendError(Client* client, const std::string& message);
-    bool isNicknameInUse(const std::string &nickname); 
-    void handle_part_command(int client_fd, const std::string& channel_name);
-    void handle_privmsg_command(int client_fd, const std::string& target, const std::string& message);
+		bool							_isRunning;
+		char							_hostname[256];
+		char *							_ip;
 
-    void createSocket();
-    void bindSocket();
-    void listenConnections();
-    void acceptNewClient();
-    //void handleClientMessage(int client_fd);
-    void pollConnections();
+		int								_serverSocket;
+		u_int16_t						_port; // serve a htons();
+		sockaddr_in						_serverAddr;
 
-    
+		const std::string				_serverName;
+		std::string						_pw;
+
+		std::map<std::string, Channel*>	_channels;
+		std::map<int, ClientInstance*>	_users;
+		std::vector<pollfd>				_fds;
+
+		//communication
+		void	channelBroadcast(Channel* channel, ClientInstance* user, const std::string& msg) const;
+		void	serverBroadcast	(ClientInstance* user, const std::string& msg) const;
+		void	joinMsg(Channel* channel, ClientInstance* user);
+		void	welcomeMsg(ClientInstance* user);
+		void	errorMsg(ClientInstance* user, int code);
+		void	handleCommand(std::vector<std::string> argv, ClientInstance* user);
+		int		handleMessage(int userFd);
+
+		// Handle Client Messages:
+		void	handleInvite(std::vector<std::string> argv, ClientInstance* user);
+		void	handleJoin(std::vector<std::string> argv, ClientInstance* user);
+		void	handleKick(std::vector<std::string> argv, ClientInstance* user);
+		void	handleMode(std::vector<std::string> argv, ClientInstance* user);
+		void	handleNick(std::vector<std::string> argv, ClientInstance* user);
+		void	handlePart(std::vector<std::string> argv, ClientInstance* user);
+		void	handlePass(std::vector<std::string> argv, ClientInstance* user);
+		void	handlePing(std::vector<std::string> argv, ClientInstance* user);
+		void	handlePrivMsg(std::vector<std::string> argv, ClientInstance* user);
+		void	handleQuit(std::vector<std::string> argv, ClientInstance* user);
+		void	handleTopic(std::vector<std::string> argv, ClientInstance* user);
+		void	handleUser(std::vector<std::string> argv, ClientInstance* user);
+
+	public:
+		Server(int port, const std::string& password);					// C'tor where port is given as an int
+		Server(const std::string & port, const std::string& password); // C'tor where port is given as a literal int
+		~Server(void);
+
+		void	init();
+		void	run ();
+		void	stop();
+        void	initializeErrorMessages();
+
+		// getters
+		bool				isRunning(void) const;
+
+		int					getPort(void) const;
+		int					getNbrOfUsers(void) const;
+		int					nChannels(void) const;
+
+		const std::string&	getName(void) const;
+		const std::string&	getPassword(void) const;
+
+		// setters
+		void				setPassword	(const std::string& password);
+
+		// channels
+		Channel*			getChannelByName(const std::string& channelName) const;
+		Channel*			createChannel(const std::string& channelName);
+		void				removeChannel(const std::string& channelName);
+
+		// users
+		ClientInstance*		getUserByFd(int userFd) const;
+		ClientInstance*		getUserByUserName(const std::string& userName) const;
+		ClientInstance*		getUserByNickName(const std::string& nickName) const;
+		ClientInstance*		createUser(void);
+		void				removeUser(int userFd);
 };
 
-#endif
+#endif /* SERVER_HPP */

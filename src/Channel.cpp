@@ -3,103 +3,155 @@
 /*                                                        :::      ::::::::   */
 /*   Channel.cpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: mgiovana <marvin@42.fr>                    +#+  +:+       +#+        */
+/*   By: luigi <luigi@student.42.fr>                +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2024/10/11 14:20:26 by mgiovana          #+#    #+#             */
-/*   Updated: 2024/10/11 14:20:28 by mgiovana         ###   ########.fr       */
+/*   Created: 2024/11/06 14:45:20 by larmogid          #+#    #+#             */
+/*   Updated: 2024/11/08 09:41:05 by luigi            ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "Channel.hpp"
-#include "Client.hpp"
-#include <algorithm>
+#include "ClientInstance.hpp"
 
-// Costruttore del canale
-Channel::Channel(const std::string& name, Client* creator) 
-    : _name(name), _userLimit(0), _inviteOnly(false) {
-    _members.push_back(creator);
-    _operators[creator] = true;  // Il creatore è l'operatore iniziale
+Channel::Channel(void) : _usersLimit(0) {}
+
+Channel::Channel(const std::string& channelName) : _name(channelName), _usersLimit(0) {}
+
+Channel::~Channel(void) {}
+
+// getters
+const std::string	Channel::getName(void) const {
+	return (this->_name);
 }
 
-// Aggiunge un membro al canale
-bool Channel::addMember(Client* client) {
-    if (_userLimit > 0 && _members.size() >= _userLimit) {
-        return false;  // Il canale ha raggiunto il limite di utenti
-    }
-    _members.push_back(client);
-    return true;
+const std::string	Channel::getPassword(void) const {
+	return (this->_pw);
 }
 
-// Verifica se un client è membro del canale
-bool Channel::isMember(Client* client) const {
-    return std::find(_members.begin(), _members.end(), client) != _members.end();
+const std::string	Channel::getTopic(void) const {
+	return (this->_topic);
 }
 
-// Rimuove un membro dal canale
-void Channel::removeMember(Client* client) {
-    _members.erase(std::remove(_members.begin(), _members.end(), client), _members.end());
-    _operators.erase(client);  // Rimuovi anche l'utente dagli operatori, se presente
+const std::string	Channel::getMode(void) const {
+	return (this->_mode);
 }
 
-// Invia un messaggio a tutti i membri del canale
-void Channel::broadcastMessage(const std::string& message, Client* sender) {
-    for (Client* member : _members) {
-        if (member != sender) {
-            send(member->getFd(), message.c_str(), message.size(), 0);
-        }
-    }
+int	Channel::getUsersLimit(void) const {
+	return (_usersLimit);
 }
 
-    // Funzione che controlla se un client è operatore
-    bool Channel::isOperator(Client* client) const {
-    auto it = _operators.find(client);  // Trova il client nella mappa
-    return it != _operators.end() && it->second;  // Restituisce true se è operatore
+int	Channel::getNbrOfUsers(void) const {
+	return (_users.size());
 }
 
-void Channel::setTopic(const std::string& topic, Client* client) {
-    if (isOperator(client)) {
-        _topic = topic;
-        std::cout << "Il client " << client->getNickname() << " ha cambiato il topic del canale in: " << topic << std::endl;
-    } else {
-        std::cerr << "Errore: Il client " << client->getNickname() << " non ha i permessi per cambiare il topic." << std::endl;
-    }
+bool	Channel::hasFlag(char flag) const {
+	return (this->_mode.find(flag) != std::string::npos);
 }
 
-// Comando KICK
-void Channel::kick(Client* client, Client* target) {
-    if (isOperator(client)) {
-        removeMember(target);
-        std::string kickMsg = ":" + client->getNickname() + " KICK " + _name + " " + target->getNickname() + "\n";
-        broadcastMessage(kickMsg, client);
-        std::cout << "Client " << target->getNickname() << " kicked from channel " << _name << std::endl;
-    } else {
-        std::cerr << "Errore: " << client->getNickname() << " non ha i permessi per eseguire il comando KICK." << std::endl;
-    }
+const std::map <std::string, bool>&	Channel::getUsers(void) const {
+	return (this->_users);
 }
 
-// Comando INVITE
-void Channel::invite(Client* client, Client* target) {
-    if (isOperator(client)) {
-        std::string inviteMsg = ":" + client->getNickname() + " INVITE " + target->getNickname() + " " + _name + "\n";
-        send(target->getFd(), inviteMsg.c_str(), inviteMsg.size(), 0);
-        std::cout << "Client " << target->getNickname() << " è stato invitato al canale " << _name << std::endl;
-    } else {
-        std::cerr << "Errore: " << client->getNickname() << " non ha i permessi per eseguire il comando INVITE." << std::endl;
-    }
+//settters
+void	Channel::setName(const std::string& name) {
+	this->_name = name;
 }
 
-// Comando MODE
-void Channel::changeMode(Client* client, char mode, bool enable) {
-    if (isOperator(client)) {
-        if (mode == 'i') {
-            _inviteOnly = enable;
-            std::cout << "La modalità invite-only del canale " << _name << " è stata " << (enable ? "abilitata" : "disabilitata") << std::endl;
-        } else if (mode == 't') {
-            _topicRestriction = enable;
-            std::cout << "La restrizione del topic del canale " << _name << " è stata " << (enable ? "abilitata" : "disabilitata") << std::endl;
-        }
-    } else {
-        std::cerr << "Errore: " << client->getNickname() << " non ha i permessi per eseguire il comando MODE." << std::endl;
-    }
+void	Channel::setPassword(const std::string& password) {
+	this->_pw = password;
 }
 
+void	Channel::setTopic(const std::string& topic) {
+	this->_topic = topic;
+}
+
+void	Channel::setUsersLimit(int userLimit) {
+	this->_usersLimit = userLimit;
+}
+
+void	Channel::addMode(const std::string& mode) {
+	for (size_t i = 0; i < mode.length(); i++) {
+		if (this->_mode.find(mode[i]) == std::string::npos) {
+			this->_mode.push_back(mode[i]);
+		}
+	}
+}
+
+void	Channel::addMode(char flag) {
+	if (this->_mode.find(flag) == std::string::npos) {
+		this->_mode.push_back(flag);
+	}
+}
+
+void	Channel::removeMode(const std::string& mode) {
+	for (size_t i = 0; i < mode.length(); i++) {
+		size_t pos = this->_mode.find(mode[i]);
+		if (pos != std::string::npos) {
+			this->_mode.erase(pos, 1);
+		}
+	}
+}
+
+void	Channel::removeMode(char flag) {
+	size_t pos = this->_mode.find(flag);
+	if (pos != std::string::npos) {
+		this->_mode.erase(pos, 1);
+	}
+}
+
+//users
+bool	Channel::isUserOperator(const std::string& nickName) const {
+	std::map<std::string, bool>::const_iterator it = _users.begin();
+	while (it != this->_users.end() && it->first != nickName) {
+		++it;
+	}
+	return (it != this->_users.end() && it->second);
+}
+
+void	Channel::addUser(const std::string& nickname) {
+	if (this->_users.find(nickname) == this->_users.end()) 	{
+		this->_users.insert(std::make_pair(nickname, false));
+	}
+}
+
+bool	Channel::isUserIn(const std::string& nickName) const {
+	return (_users.find(nickName) != this->_users.end());
+}
+
+void	Channel::updateNick(const std::string& oldNick, const std::string& newNick) {
+	std::map<std::string, bool>::iterator it = this->_users.find(oldNick);
+	if (it != this->_users.end()) {
+		this->_users.insert(std::make_pair(newNick, it->second));
+		this->_users.erase(it);
+	}
+}
+
+void	Channel::upgradeUserPriviledges(const std::string& nickName) {
+	std::map<std::string, bool>::iterator it = _users.begin();
+	while (it != this->_users.end() && it->first != nickName) {
+		++it;
+	}
+	if (it != _users.end()) {
+		it->second = true;;
+	}
+}
+
+void	Channel::downgradeUserPriviledges(const std::string& nickName) {
+	std::map<std::string, bool>::iterator it = _users.begin();
+	while (it != this->_users.end() && it->first != nickName) {
+		++it;
+	}
+	if (it != _users.end()) {
+		it->second = false;;
+	}
+}
+
+void	Channel::removeUser(const std::string& nickName) {
+	std::map<std::string, bool>::iterator it = _users.begin();
+	while (it != this->_users.end() && it->first != nickName) {
+		++it;
+	}
+	if (it != _users.end()) {
+		this->_users.erase(it);
+	}
+}
