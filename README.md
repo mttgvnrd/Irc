@@ -10,7 +10,8 @@
 ✅ **Tecnologie**:  
    - `C++98` (senza Boost/external libs)  
    - `poll()`/`select()` per I/O non bloccante  
-   - Socket TCP/IP (IPv4/IPv6)  
+   - Socket TCP/IP (IPv4/IPv6)
+
 ✅ **Funzionalità**:  
    - Autenticazione (NICK/USER/PASS)  
    - Canali pubblici/privati  
